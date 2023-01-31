@@ -1,0 +1,11 @@
+<package>
+  <name>e2</name>
+  <version>0.1.0</version>
+  <description>
+  CMPUT 412 Exercise 2 Part 2
+  </description>
+  <maintainer email="weitao@ualberta.ca">Marcus Huang</maintainer>
+  <license>None</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+</package>

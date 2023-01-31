@@ -1,10 +1,9 @@
 <launch>
 
   <group ns="$(arg veh)">
-    <node pkg="my_package" type="odometry_node.py" name="my_odometry_node"  output="screen">
-        <remap from="~/tick_l" to="/$(arg veh)/left_wheel_encoder_node/tick" />
-        <remap from="~/tick_r" to="/$(arg veh)/right_wheel_encoder_node/tick" />
-        <remap from="~/cmd" to="/$(arg veh)/wheels_driver_node/wheels_cmd_executed" />
+    <node pkg="e2" type="task_straight.py" name="task_straight"  output="screen">
+        <remap from="~car_cmd" to="/$(arg veh)/car_cmd_switch_node/cmd"/>
+        <remap from="~velocity" to="/$(arg veh)/kinematics_node/velocity" />
     </node>
    </group>
 

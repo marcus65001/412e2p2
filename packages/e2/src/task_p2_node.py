@@ -33,7 +33,7 @@ class TaskStraightNode(DTROS):
         self._radius = rospy.get_param(f'/{self.veh_name}/kinematics_node/radius', 100)
         # self._speed_gain = rospy.get_param("~speed_gain")
         # self._steer_gain = rospy.get_param("~steer_gain")
-        self._speed_gain= 0.41
+        self._speed_gain = 0.41
         self._steer_gain = 0.41
         # self._simulated_vehicle_length = rospy.get_param("~simulated_vehicle_length")
 
@@ -45,9 +45,6 @@ class TaskStraightNode(DTROS):
         self.remaining = 0
 
         # Subscribing to the wheel encoders
-        # self.sub_encoder_ticks_left = rospy.Subscriber("~tick_l", WheelEncoderStamped, self.cb_enc_l)
-        # self.sub_encoder_ticks_right = rospy.Subscriber("~tick_r",WheelEncoderStamped, self.cb_enc_r)
-        # self.sub_executed_commands = rospy.Subscriber("~cmd", WheelsCmdStamped, self.cb_executed_commands)
         self.sub_velocity = rospy.Subscriber(
             "~velocity", Twist2DStamped, self.velocity_callback, queue_size=1
         )

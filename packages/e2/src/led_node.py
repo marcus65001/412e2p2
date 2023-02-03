@@ -5,9 +5,9 @@ import numpy as np
 import os
 import rospy
 from duckietown.dtros import DTROS, NodeType, TopicType, DTParam, ParamType
-from duckietown_msgs.msg import LEDPattern
+from duckietown_msgs.msg import LEDPattern, ColorRGBA
 # from e2.srv import LEDSet
-from duckietown_msgs.srv import ColorRGBA, SetCustomLEDPatternResponse
+from duckietown_msgs.srv import SetCustomLEDPatternResponse
 from std_msgs.msg import ColorRGBA
 
 class LedNode(DTROS):

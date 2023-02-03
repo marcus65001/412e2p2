@@ -26,7 +26,7 @@ class TaskRotationNode(DTROS):
         # self._speed_gain = rospy.get_param("~speed_gain")
         # self._steer_gain = rospy.get_param("~steer_gain")
         self._speed_gain = 0.41
-        self._steer_gain = 0.41
+        self._steer_gain = 6
         self._dist_factor = 1.9
         self._dist=rospy.get_param("~dist", 1.25)*self._dist_factor
         # self._simulated_vehicle_length = rospy.get_param("~simulated_vehicle_length")
@@ -74,6 +74,7 @@ class TaskRotationNode(DTROS):
             car_cmd_msg.omega = 0
         if self.status == self.stat_rot:
             car_cmd_msg.omega = -car_cmd_msg.omega
+        print()
         self.pub_car_cmd.publish(car_cmd_msg)
     def state_pop(self):
         print('pop')
@@ -96,7 +97,7 @@ class TaskRotationNode(DTROS):
 
 
 if __name__ == '__main__':
-    node = TaskStraightNode(node_name='task_rotation_node')
+    node = TaskRotationNode(node_name='task_rotation_node')
     # Keep it spinning to keep the node alive
 
     rospy.loginfo("task_rotation_node is up and running...")

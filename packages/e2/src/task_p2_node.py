@@ -25,10 +25,8 @@ class TaskStraightNode(DTROS):
         self._radius = rospy.get_param(f'/{self.veh_name}/kinematics_node/radius', 100)
         # self._speed_gain = rospy.get_param("~speed_gain")
         # self._steer_gain = rospy.get_param("~steer_gain")
-        self._speed_gain = 0.41
+        self._speed_gain= 0.41
         self._steer_gain = 0.41
-        self._dist_factor = 1.55
-        self._dist=rospy.get_param("~dist", 1.25)*self._dist_factor
         # self._simulated_vehicle_length = rospy.get_param("~simulated_vehicle_length")
 
         self.last_vel = None
@@ -60,11 +58,12 @@ class TaskStraightNode(DTROS):
             dt = (msg.header.stamp - self.last_vel.header.stamp).to_sec()
             delta_x = self.last_vel.v * dt
             # delta_theta = self.last_vel.theta * dt
-            self.remaining_dist -= np.abs(delta_x)
+            self.remaining_dist -= delta_x
             print(delta_x, self.remaining_dist)
             if self.remaining_dist < 0:
                 self.state_pop()
         self.last_vel = msg
+        print(self.status, self.last_vel)
 
     def pub_command(self):
         car_cmd_msg = Twist2DStamped()
@@ -82,14 +81,12 @@ class TaskStraightNode(DTROS):
             print(self.status, self.remaining_dist)
         else:
             self.status = self.stat_stop
-            self.pub_command()
-            rospy.sleep(1.0)
             rospy.signal_shutdown("done")
 
     def run(self):
         r = rospy.Rate(5)
-        self.queue.append((self.stat_bwd, self._dist))
-        self.queue.append((self.stat_fwd, self._dist))
+        self.queue.append((self.stat_bwd, 0.0125))
+        self.queue.append((self.stat_fwd, 0.0125))
         self.state_pop()
         while not rospy.is_shutdown():
             self.pub_command()

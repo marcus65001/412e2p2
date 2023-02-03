@@ -27,7 +27,7 @@ class TaskStraightNode(DTROS):
         # self._steer_gain = rospy.get_param("~steer_gain")
         self._speed_gain = 0.41
         self._steer_gain = 0.41
-        self._dist_factor = 1.55
+        self._dist_factor = 1.9
         self._dist=rospy.get_param("~dist", 1.25)*self._dist_factor
         # self._simulated_vehicle_length = rospy.get_param("~simulated_vehicle_length")
 

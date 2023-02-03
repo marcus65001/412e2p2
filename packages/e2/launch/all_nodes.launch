@@ -6,10 +6,9 @@
 <!--         <remap from="~velocity" to="/$(arg veh)/kinematics_node/velocity" /> -->
 <!--         <param name="dist" type="double" value="1.00" /> -->
 <!--     </node> -->
-    <node pkg="e2" type="task_straight.py" name="task_straight"  output="screen">
+    <node pkg="e2" type="task_rotation_node.py" name="task_rotation_node"  output="screen">
         <remap from="~car_cmd" to="/$(arg veh)/car_cmd_switch_node/cmd"/>
         <remap from="~velocity" to="/$(arg veh)/kinematics_node/velocity" />
-        <param name="dist" type="double" value="1.00" />
     </node>
     <node pkg="e2" type="led_node.py" name="led_node"  output="screen">
         <remap from="~led_cmd" to="/$(arg veh)/led_driver_node/led_pattern"/>

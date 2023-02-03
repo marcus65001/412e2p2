@@ -8,9 +8,17 @@ from duckietown.dtros import DTROS, NodeType, TopicType, DTParam, ParamType
 from duckietown_msgs.msg import Twist2DStamped, WheelEncoderStamped, WheelsCmdStamped
 from std_msgs.msg import Header, Float32, Int32
 import rosbag
+from enum import Enum, auto
 
 
 class TaskStraightNode(DTROS):
+
+    class State(Enum):
+        IDLE=auto()
+        WAIT=auto()
+        ROT=auto()
+        FW=auto()
+        ROTC=auto()
 
     def __init__(self, node_name):
         """Wheel Encoder Node
@@ -30,10 +38,11 @@ class TaskStraightNode(DTROS):
         # self._simulated_vehicle_length = rospy.get_param("~simulated_vehicle_length")
 
         self.last_vel = None
-        self.stat_idle, self.stat_fwd, self.stat_bwd, self.stat_stop = range(4)
-        self.status = self.stat_idle
+        # self.stat_idle, self.stat_fwd, self.stat_bwd, self.stat_stop = range(4)
+
+        self.status = self.State.IDLE
         self.queue = []
-        self.remaining_dist = 0
+        self.remaining = 0
 
         # Subscribing to the wheel encoders
         # self.sub_encoder_ticks_left = rospy.Subscriber("~tick_l", WheelEncoderStamped, self.cb_enc_l)
@@ -56,37 +65,74 @@ class TaskStraightNode(DTROS):
     def velocity_callback(self, msg):
         if (not self.status == self.stat_stop) and (self.last_vel):
             dt = (msg.header.stamp - self.last_vel.header.stamp).to_sec()
-            delta_x = self.last_vel.v * dt
-            # delta_theta = self.last_vel.theta * dt
-            self.remaining_dist -= delta_x
-            print(delta_x, self.remaining_dist)
-            if self.remaining_dist < 0:
+            if self.status in {self.State.ROTC,self.State.ROT}:
+                delta_omega = self.last_vel.omega * dt
+                self.remaining -= delta_omega
+            else:
+                delta_x = self.last_vel.v * dt
+                self.remaining -= delta_x
+            print(delta_x, delta_omega, self.remaining)
+            if self.remaining < 0:
                 self.state_pop()
         self.last_vel = msg
-        print(self.status, self.last_vel)
+        # print(self.status, self.last_vel)
 
-    def pub_command(self):
+
+    def carcmd(self,v,omega):
         car_cmd_msg = Twist2DStamped()
         car_cmd_msg.header.stamp = rospy.get_rostime()
-        car_cmd_msg.v = self._speed_gain
-        if self.status in {self.stat_stop,self.stat_idle}:
-            car_cmd_msg.v = 0
-        if self.status == self.stat_bwd:
-            car_cmd_msg.v = -car_cmd_msg.v
+        car_cmd_msg.v = v*self._speed_gain
+        car_cmd_msg.omega = omega*self._steer_gain
         self.pub_car_cmd.publish(car_cmd_msg)
+
+    def pub_command(self):
+        def wait():
+            self.carcmd(0,0)
+            self.state_pop()
+            rospy.sleep(5.)
+        def rot():
+            self.carcmd(0,-1)
+
+        def rotc():
+            self.carcmd(0,1)
+
+        def fwd():
+            self.carcmd(1,0)
+
+        def idle():
+            self.carcmd(0,0)
+
+        switch={
+            self.State.IDLE: idle,
+            self.State.ROT: rot,
+            self.State.ROTC: rotc,
+            self.State.WAIT: wait,
+            self.State.FW: fwd,
+        }
+
+
     def state_pop(self):
         print('pop')
         if self.queue:
-            self.status, self.remaining_dist = self.queue.pop()
-            print(self.status, self.remaining_dist)
+            self.status = self.queue.pop()
+            print(self.status, self.remaining)
         else:
             self.status = self.stat_stop
             rospy.signal_shutdown("done")
 
     def run(self):
         r = rospy.Rate(5)
-        self.queue.append((self.stat_bwd, 0.0125))
-        self.queue.append((self.stat_fwd, 0.0125))
+        self.queue=[self.State.WAIT,
+                    self.State.ROT,
+                    self.State.FW,
+                    self.State.ROTC,
+                    self.State.FW,
+                    self.State.ROTC,
+                    self.State.FW,
+                    self.State.WAIT,
+                    self.State.ROTC,
+                    self.State.FW,
+                    self.State.WAIT]
         self.state_pop()
         while not rospy.is_shutdown():
             self.pub_command()

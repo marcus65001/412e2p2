@@ -72,7 +72,7 @@ class TaskRotationNode(DTROS):
         car_cmd_msg.omega = self._steer_gain
         if self.status in {self.stat_stop,self.stat_idle}:
             car_cmd_msg.omega = 0
-        if self.status == self.stat_rot_counter:
+        if self.status == self.stat_rot:
             car_cmd_msg.omega = -car_cmd_msg.omega
         self.pub_car_cmd.publish(car_cmd_msg)
     def state_pop(self):

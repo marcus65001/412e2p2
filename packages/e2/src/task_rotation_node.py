@@ -26,9 +26,8 @@ class TaskRotationNode(DTROS):
         # self._speed_gain = rospy.get_param("~speed_gain")
         # self._steer_gain = rospy.get_param("~steer_gain")
         self._speed_gain = 0.41
-        self._steer_gain = 6
-        self._dist_factor = 1.9
-        self._dist=rospy.get_param("~dist", 1.25)*self._dist_factor
+        self._steer_gain = 4
+        self._angle_factor = rospy.get_param("/e2/rot_factor", 5.0)
         # self._simulated_vehicle_length = rospy.get_param("~simulated_vehicle_length")
 
         self.last_vel = None
@@ -74,12 +73,12 @@ class TaskRotationNode(DTROS):
             car_cmd_msg.omega = 0
         if self.status == self.stat_rot:
             car_cmd_msg.omega = -car_cmd_msg.omega
-        print()
         self.pub_car_cmd.publish(car_cmd_msg)
     def state_pop(self):
         print('pop')
         if self.queue:
             self.status, self.remaining_angle = self.queue.pop()
+            self.remaining_angle *= self._angle_factor
             print(self.status, self.remaining_angle)
         else:
             self.status = self.stat_stop
@@ -88,7 +87,7 @@ class TaskRotationNode(DTROS):
             rospy.signal_shutdown("done")
 
     def run(self):
-        r = rospy.Rate(5)
+        r = rospy.Rate(20)
         self.queue.append((self.stat_rot, np.pi/2))
         self.state_pop()
         while not rospy.is_shutdown():

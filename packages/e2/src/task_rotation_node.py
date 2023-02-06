@@ -87,7 +87,7 @@ class TaskRotationNode(DTROS):
             rospy.signal_shutdown("done")
 
     def run(self):
-        r = rospy.Rate(20)
+        r = rospy.Rate(10)
         self.queue.append((self.stat_rot, np.pi/2))
         self.state_pop()
         while not rospy.is_shutdown():

@@ -10,10 +10,14 @@
 <!--         <remap from="~car_cmd" to="/$(arg veh)/car_cmd_switch_node/cmd"/> -->
 <!--         <remap from="~velocity" to="/$(arg veh)/kinematics_node/velocity" /> -->
 <!--     </node> -->
-    <node pkg="e2" type="led_node.py" name="led_node"  output="screen">
-        <remap from="~led_cmd" to="/$(arg veh)/led_driver_node/led_pattern"/>
-        <remap from="~led_emitter" to="/$(arg veh)/led_emitter_node/set_custom_pattern"/>
+    <node pkg="e2" type="task_p2_node.py" name="task_p2_node"  output="screen">
+        <remap from="~car_cmd" to="/$(arg veh)/car_cmd_switch_node/cmd"/>
+        <remap from="~velocity" to="/$(arg veh)/kinematics_node/velocity" />
     </node>
+<!--     <node pkg="e2" type="led_node.py" name="led_node"  output="screen"> -->
+<!--         <remap from="~led_cmd" to="/$(arg veh)/led_driver_node/led_pattern"/> -->
+<!--         <remap from="~led_emitter" to="/$(arg veh)/led_emitter_node/set_custom_pattern"/> -->
+<!--     </node> -->
    </group>
 
 </launch>

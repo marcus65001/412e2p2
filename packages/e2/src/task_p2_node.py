@@ -6,12 +6,14 @@ import os
 import rospy
 from duckietown.dtros import DTROS, NodeType, TopicType, DTParam, ParamType
 from duckietown_msgs.msg import Twist2DStamped, WheelEncoderStamped, WheelsCmdStamped
+from duckietown_msgs.srv import ChangePattern, ChangePatternResponse
+
 from std_msgs.msg import Header, Float32, Int32
 import rosbag
 from enum import Enum, auto
 
 
-class TaskStraightNode(DTROS):
+class TaskP2Node(DTROS):
 
     class State(Enum):
         IDLE=auto()
@@ -26,15 +28,22 @@ class TaskStraightNode(DTROS):
         """
 
         # Initialize the DTROS parent class
-        super(TaskStraightNode, self).__init__(node_name=node_name, node_type=NodeType.PERCEPTION)
+        super(TaskP2Node, self).__init__(node_name=node_name, node_type=NodeType.PERCEPTION)
         self.veh_name = rospy.get_namespace().strip("/")
 
         # Get static parameters
         self._radius = rospy.get_param(f'/{self.veh_name}/kinematics_node/radius', 100)
         # self._speed_gain = rospy.get_param("~speed_gain")
         # self._steer_gain = rospy.get_param("~steer_gain")
-        self._speed_gain = 0.41
-        self._steer_gain = 0.41
+        self._speed_gain = rospy.get_param("/e2/speed_gain", 0.41)
+        self._steer_gain = rospy.get_param("/e2/steer_gain", 6.5)
+        self._factor={
+            self.State.ROT: rospy.get_param("/e2/steer_factor", 1.0),
+            self.State.ROTC: rospy.get_param("/e2/steer_factor", 1.0),
+            self.State.WAIT: rospy.get_param("/e2/wait_factor", 5.0),
+            self.State.FW: rospy.get_param("/e2/speed_factor", 1.25),
+        }
+        self.log(self._factor)
         # self._simulated_vehicle_length = rospy.get_param("~simulated_vehicle_length")
 
         self.last_vel = None
@@ -43,6 +52,7 @@ class TaskStraightNode(DTROS):
         self.status = self.State.IDLE
         self.queue = []
         self.remaining = 0
+        self.wait_start = None
 
         # Subscribing to the wheel encoders
         self.sub_velocity = rospy.Subscriber(
@@ -54,21 +64,28 @@ class TaskStraightNode(DTROS):
             "~car_cmd", Twist2DStamped, queue_size=1, dt_topic_type=TopicType.CONTROL
         )
 
+        # Service Proxy
+        # self.changePattern = rospy.ServiceProxy(
+        #     "~/set_pattern", ChangePattern
+        # )
+
         self.log("Initialized")
 
     def on_shutdown(self):
-        pass
+        self.status=self.State.IDLE
+        self.pub_command()
 
     def velocity_callback(self, msg):
-        if (not self.status == self.stat_stop) and (self.last_vel):
+        if (not self.status in {self.State.IDLE,self.State.WAIT}) and (self.last_vel):
             dt = (msg.header.stamp - self.last_vel.header.stamp).to_sec()
-            if self.status in {self.State.ROTC,self.State.ROT}:
+            if self.status in {self.State.ROTC, self.State.ROT}:
                 delta_omega = self.last_vel.omega * dt
-                self.remaining -= delta_omega
-            else:
+                self.remaining -= abs(delta_omega)
+                print(delta_omega, self.remaining)
+            if self.status == self.State.FW:
                 delta_x = self.last_vel.v * dt
                 self.remaining -= delta_x
-            print(delta_x, delta_omega, self.remaining)
+                print(delta_x, self.remaining)
             if self.remaining < 0:
                 self.state_pop()
         self.last_vel = msg
@@ -82,11 +99,20 @@ class TaskStraightNode(DTROS):
         car_cmd_msg.omega = omega*self._steer_gain
         self.pub_car_cmd.publish(car_cmd_msg)
 
-    def pub_command(self):
+    def pub_command(self, event=None):
         def wait():
+            if not self.wait_start:
+                # self.changePattern("BLUE")
+                self.wait_start = rospy.get_time()
+                print("wait start",self.wait_start)
+            else:
+                if (rospy.get_time()-self.wait_start)>self.remaining:
+                    print("wait end")
+                    # self.changePattern("WHITE")
+                    self.state_pop()
+                    self.wait_start = None
             self.carcmd(0,0)
-            self.state_pop()
-            rospy.sleep(5.)
+
         def rot():
             self.carcmd(0,-1)
 
@@ -107,39 +133,42 @@ class TaskStraightNode(DTROS):
             self.State.FW: fwd,
         }
 
+        switch[self.status]()
+
 
     def state_pop(self):
         print('pop')
         if self.queue:
+            self.last_vel = None
             self.status = self.queue.pop()
+            self.remaining = self._factor[self.status]
             print(self.status, self.remaining)
         else:
-            self.status = self.stat_stop
+            self.status = self.State.IDLE
             rospy.signal_shutdown("done")
 
     def run(self):
         r = rospy.Rate(5)
-        self.queue=[self.State.WAIT,
-                    self.State.ROT,
-                    self.State.FW,
-                    self.State.ROTC,
-                    self.State.FW,
-                    self.State.ROTC,
-                    self.State.FW,
-                    self.State.WAIT,
-                    self.State.ROTC,
-                    self.State.FW,
-                    self.State.WAIT]
+        # self.queue=[self.State.WAIT,
+        #             self.State.ROT,
+        #             self.State.FW,
+        #             self.State.ROTC,
+        #             self.State.FW,
+        #             self.State.ROTC,
+        #             self.State.FW,
+        #             self.State.WAIT,
+        #             self.State.ROTC,
+        #             self.State.FW,
+        #             self.State.WAIT]
+        self.queue=[self.State.ROTC,self.State.WAIT,self.State.FW,self.State.WAIT]
         self.state_pop()
-        while not rospy.is_shutdown():
-            self.pub_command()
-            r.sleep()
 
 
 if __name__ == '__main__':
-    node = TaskStraightNode(node_name='task_straight_node')
+    node = TaskP2Node(node_name='task_p2_node')
     # Keep it spinning to keep the node alive
 
-    rospy.loginfo("task_straight_node is up and running...")
+    rospy.loginfo("task_p2_node is up and running...")
+    rospy.Timer(rospy.Duration(0.05), node.pub_command)
     node.run()
     rospy.spin()

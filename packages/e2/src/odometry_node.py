@@ -22,30 +22,23 @@ class OdometryNode(DTROS):
         self.veh_name = rospy.get_namespace().strip("/")
 
         self.last_vel = None
-        self.xw=0.
-        self.yw=0.
-        self.thetaw=0.
         self.pose_robot=Pose2DStamped()
-        self.pose_robot.x = 0
-        self.pose_robot.y = 0
-        self.pose_robot.theta = 0
+        self.pose_world=Pose2DStamped()
 
-        self.bag=rosbag.Bag('/data/bags/task.bag')
+        self.rot_factor= 0.266
+        self.fw_factor = 0.592
+
+
+        self.bag=rosbag.Bag('/data/bags/task.bag','w')
 
         # Subscribers
         self.sub_velocity = rospy.Subscriber(
             "~velocity", Twist2DStamped, self.velocity_callback, queue_size=1
         )
 
-        # Publishers
-        self.pub_car_cmd = rospy.Publisher(
-            "~car_cmd", Twist2DStamped, queue_size=1, dt_topic_type=TopicType.CONTROL
-        )
+        self.print_odometry = rospy.get_param("/e2/print_odometry", False)
 
-        self.log(f"Spd gain: {self._speed_gain}")
-        self.log(f"Steer gain: {self._steer_gain}")
-        self.log(f"Angle factor: {self._angle_factor}")
-        self.log(f"Loop rate: {self._loop_rate}")
+
         self.log("Initialized")
 
     def on_shutdown(self):
@@ -54,35 +47,45 @@ class OdometryNode(DTROS):
     def velocity_callback(self, msg):
         if self.last_vel:
             dt = (msg.header.stamp - self.last_vel.header.stamp).to_sec()
-            delta_theta = self.last_vel.omega * dt
+            self.last_vel.v*=self.fw_factor
+            delta_theta = self.last_vel.omega*self.rot_factor * dt
             # delta_x = self.last_vel.v * dt
-            if np.abs(self.last_theta_dot) < 0.000001:
+            if np.abs(self.last_vel.omega) < 0.000001:
                 # straight line
-                delta_x = self.last_v * dt
-                delta_y = 0
+                delta_y = self.last_vel.v * dt
+                delta_x = 0
             else:
                 # arc of circle
-                radius = self.last_v / self.last_theta_dot
-                delta_x = radius * np.sin(delta_theta)
-                delta_y = radius * (1.0 - np.cos(delta_theta))
-            self.xw+=delta_x
-            self.yw+=delta_y
-            self.thetaw+=delta_theta
-            msg = Pose2DStamped()
-            msg.header.stamp = rospy.Time.now()
-            self.pose_robot.header.stamp = msg.header.stamp
-            msg.x=self.xw
-            msg.y=self.yw
-            msg.theta=self.thetaw
-            self.log(msg)
+                radius = self.last_vel.v / self.last_vel.omega
+                delta_x = radius * (1.0 - np.cos(delta_theta))
+                delta_y = radius * np.sin(delta_theta)
+
+            # self.pose_robot.x+=delta_x
+            # self.pose_robot.y+=delta_y
+            self.pose_robot.theta+=delta_theta
+
+            delta_xw = delta_x * np.cos(self.pose_robot.theta) - delta_y*np.sin(self.pose_robot.theta)
+            delta_yw = delta_x * np.sin(self.pose_robot.theta) + delta_y*np.cos(self.pose_robot.theta)
+
+            self.pose_world.x+=delta_xw
+            self.pose_world.y+=delta_yw
+            self.pose_world.theta+=delta_theta
+
+            self.pose_world.header.stamp = rospy.Time.now()
+            self.pose_robot.header.stamp = self.pose_world.header.stamp
+            if self.print_odometry:
+                self.log('world {}'.format(self.pose_world))
+                self.log('robot {}'.format(self.pose_robot))
 
             try:
-                self.bag.write("world_frame_pose", msg)
+                self.bag.write("world_frame_pose",self.pose_world)
+                self.bag.write("robot_frame_pose", self.pose_robot)
             except Exception as e:
                 self.log("bag closed")
 
             # self.bag.write("robot_frame_pose", self.pose_robot)
             print(delta_x, delta_y, delta_theta)
+            print(delta_xw, delta_yw, delta_theta)
         self.last_vel = msg
 
 

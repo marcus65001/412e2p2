@@ -4,6 +4,7 @@ from duckietown.dtros import DTROS, NodeType, TopicType, DTParam, ParamType
 from duckietown_msgs.msg import LEDPattern
 from e2.srv import LEDSet,LEDSetResponse
 from duckietown_msgs.srv import ChangePattern, ChangePatternResponse
+from std_msgs.msg import String
 
 
 class LedNode(DTROS):
@@ -41,7 +42,10 @@ class LedNode(DTROS):
 
     def srv_set_led(self, msg):
         self.log(msg)
-        return self.srvp_led_emitter(msg)
+        msgp = String()
+        msgp.data=msg.data
+        self.srvp_led_emitter(msgp)
+        return LEDSetResponse()
 
 
 

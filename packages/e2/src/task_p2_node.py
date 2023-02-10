@@ -7,7 +7,7 @@ import rospy
 from duckietown.dtros import DTROS, NodeType, TopicType, DTParam, ParamType
 from duckietown_msgs.msg import Twist2DStamped, WheelEncoderStamped, WheelsCmdStamped
 # from duckietown_msgs.srv import ChangePattern, ChangePatternResponse
-from e2.srv import LEDSet,LEDSetResponse
+from e2.srv import LEDSet, LEDSetResponse
 from std_msgs.msg import String
 
 from std_msgs.msg import Header, Float32, Int32
@@ -16,15 +16,15 @@ from enum import Enum, auto
 
 
 class TaskP2Node(DTROS):
-
     class State(Enum):
-        IDLE=auto()
-        WAIT=auto()
-        ROT=auto()
-        FW=auto()
-        ROTC=auto()
-        CIR=auto()
-        LED=auto()
+        IDLE = auto()
+        WAIT = auto()
+        ROT = auto()
+        FW = auto()
+        ROTC = auto()
+        CIR = auto()
+        CIRP = auto()
+        LED = auto()
 
     def __init__(self, node_name):
         """Wheel Encoder Node
@@ -41,14 +41,17 @@ class TaskP2Node(DTROS):
         # self._steer_gain = rospy.get_param("~steer_gain")
         self._speed_gain = rospy.get_param("/e2/speed_gain", 0.41)
         self._steer_gain = rospy.get_param("/e2/steer_gain", 6.5)
-        self._factor={
+        self._circle_ratio = rospy.get_param("/e2/circle_ratio", 0.5)
+        self._factor = {
             self.State.ROT: rospy.get_param("/e2/steer_factor", 1.0),
             self.State.ROTC: rospy.get_param("/e2/steer_factor", 1.0),
             self.State.WAIT: rospy.get_param("/e2/wait_factor", 5.0),
             self.State.FW: rospy.get_param("/e2/speed_factor", 1.25),
             self.State.CIR: rospy.get_param("/e2/circle_factor", 1),
+            self.State.CIRP: rospy.get_param("/e2/speed_factor", 1.25) * 0.5,
             self.State.LED: 0
         }
+        self._print_odometry = rospy.get_param("/e2/print_odometry", False)
         self.log(self._factor)
         # self._simulated_vehicle_length = rospy.get_param("~simulated_vehicle_length")
 
@@ -83,27 +86,28 @@ class TaskP2Node(DTROS):
         self.pub_command()
 
     def velocity_callback(self, msg):
-        if (not self.status in {self.State.IDLE,self.State.WAIT}) and (self.last_vel):
+        if (not self.status in {self.State.IDLE, self.State.WAIT}) and (self.last_vel):
             dt = (msg.header.stamp - self.last_vel.header.stamp).to_sec()
             if self.status in {self.State.ROTC, self.State.ROT}:
                 delta_omega = self.last_vel.omega * dt
                 self.remaining -= abs(delta_omega)
-                print(delta_omega, self.remaining)
-            if self.status == self.State.FW:
+                if self._print_odometry:
+                    print(delta_omega, self.remaining)
+            if self.status in {self.State.FW, self.State.CIR}:
                 delta_x = self.last_vel.v * dt
                 self.remaining -= delta_x
-                print(delta_x, self.remaining)
+                if self._print_odometry:
+                    print(delta_x, self.remaining)
             if self.remaining < 0:
                 self.state_pop()
         self.last_vel = msg
         # print(self.status, self.last_vel)
 
-
-    def carcmd(self,v,omega):
+    def carcmd(self, v, omega):
         car_cmd_msg = Twist2DStamped()
         car_cmd_msg.header.stamp = rospy.get_rostime()
-        car_cmd_msg.v = v*self._speed_gain
-        car_cmd_msg.omega = omega*self._steer_gain
+        car_cmd_msg.v = v * self._speed_gain
+        car_cmd_msg.omega = omega * self._steer_gain
         self.pub_car_cmd.publish(car_cmd_msg)
 
     def pub_command(self, event=None):
@@ -112,38 +116,41 @@ class TaskP2Node(DTROS):
                 self.wait_start = rospy.get_time()
                 print("wait start", self.wait_start)
             else:
-                if (rospy.get_time()-self.wait_start)>self.remaining:
+                if (rospy.get_time() - self.wait_start) > self.remaining:
                     print("wait end")
                     self.state_pop()
                     self.wait_start = None
-            self.carcmd(0,0)
+            self.carcmd(0, 0)
 
         def rot():
-            self.carcmd(0,-1)
+            self.carcmd(0, -1)
 
         def rotc():
-            self.carcmd(0,1)
+            self.carcmd(0, 1)
 
         def fwd():
-            self.carcmd(1,0)
+            self.carcmd(1, 0)
 
         def cir():
-            self.carcmd(1,self._factor[self.State.CIR])
+            self.carcmd(1, -self._circle_ratio)
+
+        def cir_pre():
+            fwd()
 
         def idle():
-            self.carcmd(0,0)
+            self.carcmd(0, 0)
 
         def LED():
             try:
-                msg=String()
-                msg.data=self.LEDlist.pop()
+                msg = String()
+                msg.data = self.LEDlist.pop()
                 self.changePattern(msg)
             except Exception as e:
                 self.log("LED pattern change failed")
                 self.log(e)
             self.state_pop()
 
-        switch={
+        switch = {
             self.State.IDLE: idle,
             self.State.ROT: rot,
             self.State.ROTC: rotc,
@@ -154,7 +161,6 @@ class TaskP2Node(DTROS):
         }
 
         switch[self.status]()
-
 
     def state_pop(self):
         print('pop')
@@ -168,20 +174,21 @@ class TaskP2Node(DTROS):
             rospy.signal_shutdown("done")
 
     def run(self):
-        r = rospy.Rate(5)
-        # self.queue=[self.State.WAIT,
-        #             self.State.ROT,
-        #             self.State.FW,
-        #             self.State.ROTC,
-        #             self.State.FW,
-        #             self.State.ROTC,
-        #             self.State.FW,
-        #             self.State.WAIT,
-        #             self.State.ROTC,
-        #             self.State.FW,
-        #             self.State.WAIT]
-        self.queue = [self.State.ROT,self.State.CIR, self.State.WAIT,
-                      self.status.LED]
+        # self.queue = [self.State.ROTC,
+        #               self.State.ROTC,
+        #               self.State.FW,
+        #               self.State.ROTC,
+        #               self.State.WAIT,
+        #               self.State.LED,
+        #               self.State.FW,
+        #               self.State.ROTC,
+        #               self.State.FW,
+        #               self.State.ROTC,
+        #               self.State.FW,
+        #               self.State.ROT,
+        #               self.State.WAIT,
+        #               self.State.LED]
+        self.queue = [self.State.ROTC, self.State.FW, self.State.ROT, self.State.LED]
         self.state_pop()
 
 

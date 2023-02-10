@@ -6,7 +6,9 @@ import os
 import rospy
 from duckietown.dtros import DTROS, NodeType, TopicType, DTParam, ParamType
 from duckietown_msgs.msg import Twist2DStamped, WheelEncoderStamped, WheelsCmdStamped
-from duckietown_msgs.srv import ChangePattern, ChangePatternResponse
+# from duckietown_msgs.srv import ChangePattern, ChangePatternResponse
+from e2.srv import LEDSet,LEDSetResponse
+from std_msgs.msg import String
 
 from std_msgs.msg import Header, Float32, Int32
 import rosbag
@@ -21,6 +23,8 @@ class TaskP2Node(DTROS):
         ROT=auto()
         FW=auto()
         ROTC=auto()
+        CIR=auto()
+        LED=auto()
 
     def __init__(self, node_name):
         """Wheel Encoder Node
@@ -32,7 +36,7 @@ class TaskP2Node(DTROS):
         self.veh_name = rospy.get_namespace().strip("/")
 
         # Get static parameters
-        self._radius = rospy.get_param(f'/{self.veh_name}/kinematics_node/radius', 100)
+        # self._radius = rospy.get_param(f'/{self.veh_name}/kinematics_node/radius', 100)
         # self._speed_gain = rospy.get_param("~speed_gain")
         # self._steer_gain = rospy.get_param("~steer_gain")
         self._speed_gain = rospy.get_param("/e2/speed_gain", 0.41)
@@ -42,6 +46,8 @@ class TaskP2Node(DTROS):
             self.State.ROTC: rospy.get_param("/e2/steer_factor", 1.0),
             self.State.WAIT: rospy.get_param("/e2/wait_factor", 5.0),
             self.State.FW: rospy.get_param("/e2/speed_factor", 1.25),
+            self.State.CIR: rospy.get_param("/e2/circle_factor", 1),
+            self.State.LED: 0
         }
         self.log(self._factor)
         # self._simulated_vehicle_length = rospy.get_param("~simulated_vehicle_length")
@@ -53,6 +59,7 @@ class TaskP2Node(DTROS):
         self.queue = []
         self.remaining = 0
         self.wait_start = None
+        self.LEDlist = ["WHITE", "BLUE"]
 
         # Subscribing to the wheel encoders
         self.sub_velocity = rospy.Subscriber(
@@ -65,14 +72,14 @@ class TaskP2Node(DTROS):
         )
 
         # Service Proxy
-        # self.changePattern = rospy.ServiceProxy(
-        #     "~/set_pattern", ChangePattern
-        # )
+        self.changePattern = rospy.ServiceProxy(
+            "~set_pattern", LEDSet
+        )
 
         self.log("Initialized")
 
     def on_shutdown(self):
-        self.status=self.State.IDLE
+        self.status = self.State.IDLE
         self.pub_command()
 
     def velocity_callback(self, msg):
@@ -102,13 +109,11 @@ class TaskP2Node(DTROS):
     def pub_command(self, event=None):
         def wait():
             if not self.wait_start:
-                # self.changePattern("BLUE")
                 self.wait_start = rospy.get_time()
-                print("wait start",self.wait_start)
+                print("wait start", self.wait_start)
             else:
                 if (rospy.get_time()-self.wait_start)>self.remaining:
                     print("wait end")
-                    # self.changePattern("WHITE")
                     self.state_pop()
                     self.wait_start = None
             self.carcmd(0,0)
@@ -122,8 +127,21 @@ class TaskP2Node(DTROS):
         def fwd():
             self.carcmd(1,0)
 
+        def cir():
+            self.carcmd(1,self._factor[self.State.CIR])
+
         def idle():
             self.carcmd(0,0)
+
+        def LED():
+            try:
+                msg=String()
+                msg.data=self.LEDlist.pop()
+                self.changePattern(msg)
+            except Exception as e:
+                self.log("LED pattern change failed")
+                self.log(e)
+            self.state_pop()
 
         switch={
             self.State.IDLE: idle,
@@ -131,6 +149,8 @@ class TaskP2Node(DTROS):
             self.State.ROTC: rotc,
             self.State.WAIT: wait,
             self.State.FW: fwd,
+            self.State.CIR: cir,
+            self.State.LED: LED
         }
 
         switch[self.status]()
@@ -160,7 +180,8 @@ class TaskP2Node(DTROS):
         #             self.State.ROTC,
         #             self.State.FW,
         #             self.State.WAIT]
-        self.queue=[self.State.ROTC,self.State.WAIT,self.State.FW,self.State.WAIT]
+        self.queue = [self.State.ROT,self.State.CIR, self.State.WAIT,
+                      self.status.LED]
         self.state_pop()
 
 
@@ -169,6 +190,6 @@ if __name__ == '__main__':
     # Keep it spinning to keep the node alive
 
     rospy.loginfo("task_p2_node is up and running...")
-    rospy.Timer(rospy.Duration(0.05), node.pub_command)
+    rospy.Timer(rospy.Duration(0.02), node.pub_command)
     node.run()
     rospy.spin()

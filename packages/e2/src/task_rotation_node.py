@@ -26,8 +26,9 @@ class TaskRotationNode(DTROS):
         # self._speed_gain = rospy.get_param("~speed_gain")
         # self._steer_gain = rospy.get_param("~steer_gain")
         self._speed_gain = 0.41
-        self._steer_gain = 4
+        self._steer_gain = rospy.get_param("/e2/steer_gain", 6.5)
         self._angle_factor = rospy.get_param("/e2/rot_factor", 5.0)
+        self._loop_rate = rospy.get_param("/e2/loop_rate", 15)
         # self._simulated_vehicle_length = rospy.get_param("~simulated_vehicle_length")
 
         self.last_vel = None
@@ -49,13 +50,19 @@ class TaskRotationNode(DTROS):
             "~car_cmd", Twist2DStamped, queue_size=1, dt_topic_type=TopicType.CONTROL
         )
 
+        self.log(f"Spd gain: {self._speed_gain}")
+        self.log(f"Steer gain: {self._steer_gain}")
+        self.log(f"Angle factor: {self._angle_factor}")
+        self.log(f"Loop rate: {self._loop_rate}")
         self.log("Initialized")
 
     def on_shutdown(self):
-        pass
+        self.status = self.stat_stop
+        self.pub_command()
 
     def velocity_callback(self, msg):
-        if (not self.status == self.stat_stop) and (self.last_vel):
+        self.log(msg)
+        if (not self.status in {self.stat_stop, self.stat_idle}) and (self.last_vel):
             dt = (msg.header.stamp - self.last_vel.header.stamp).to_sec()
             # delta_x = self.last_vel.v * dt
             delta_omega = self.last_vel.omega * dt
@@ -65,40 +72,48 @@ class TaskRotationNode(DTROS):
                 self.state_pop()
         self.last_vel = msg
 
-    def pub_command(self):
+    def pub_command(self, event=None):
         car_cmd_msg = Twist2DStamped()
         car_cmd_msg.header.stamp = rospy.get_rostime()
         car_cmd_msg.omega = self._steer_gain
-        if self.status in {self.stat_stop,self.stat_idle}:
+        if self.status in {self.stat_stop, self.stat_idle}:
             car_cmd_msg.omega = 0
         if self.status == self.stat_rot:
             car_cmd_msg.omega = -car_cmd_msg.omega
         self.pub_car_cmd.publish(car_cmd_msg)
+
     def state_pop(self):
         print('pop')
         if self.queue:
+            self.status = self.stat_idle
+            self.pub_command()
+            rospy.sleep(0.5)
+            self.last_vel=None
             self.status, self.remaining_angle = self.queue.pop()
             self.remaining_angle *= self._angle_factor
+            self.pub_command()
             print(self.status, self.remaining_angle)
         else:
             self.status = self.stat_stop
+            print(self.status, self.remaining_angle)
             self.pub_command()
-            rospy.sleep(1.0)
+            rospy.sleep(1.)
             rospy.signal_shutdown("done")
 
     def run(self):
-        r = rospy.Rate(10)
+        # r = rospy.Rate(self._loop_rate)
         self.queue.append((self.stat_rot, np.pi/2))
         self.state_pop()
-        while not rospy.is_shutdown():
-            self.pub_command()
-            r.sleep()
+        # while not rospy.is_shutdown():
+            # self.pub_command()
+            # pass
+            # r.sleep()
 
 
 if __name__ == '__main__':
     node = TaskRotationNode(node_name='task_rotation_node')
     # Keep it spinning to keep the node alive
-
     rospy.loginfo("task_rotation_node is up and running...")
+    rospy.Timer(rospy.Duration(0.05), node.pub_command)
     node.run()
     rospy.spin()

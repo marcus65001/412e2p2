@@ -36,9 +36,6 @@ class OdometryNode(DTROS):
             "~velocity", Twist2DStamped, self.velocity_callback, queue_size=1
         )
 
-        self.sub_encoder_ticks_left = rospy.Subscriber("~tick_l", WheelEncoderStamped, self.cb_enc_l)
-        self.sub_encoder_ticks_right = rospy.Subscriber("~tick_r", WheelEncoderStamped, self.cb_enc_r)
-
         self.print_odometry = rospy.get_param("/e2/print_odometry", False)
 
 

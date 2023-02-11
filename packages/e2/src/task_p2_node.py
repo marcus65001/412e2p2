@@ -52,6 +52,13 @@ class TaskP2Node(DTROS):
         self._rot_factor *= rospy.get_param("/e2/rot_factor", 1.0)
         self._fwd_factor = (1.25/self._radius)*self._resolution
         self._fwd_factor *= rospy.get_param("/e2/fwd_factor", 1.0)
+
+        self.log(self._speed_gain)
+        self.log(self._steer_gain)
+
+        self.log(self._rot_factor)
+        self.log(self._fwd_factor)
+
         self._factor = {
             self.State.ROT: (self._rot_factor, self._rot_factor),
             self.State.ROTC: (self._rot_factor, self._rot_factor),

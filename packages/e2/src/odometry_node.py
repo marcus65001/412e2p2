@@ -25,7 +25,7 @@ class OdometryNode(DTROS):
         self.pose_robot=Pose2DStamped()
         self.pose_world=Pose2DStamped()
 
-        self.rot_factor= 0.266
+        self.rot_factor= (0.5*np.pi)/rospy.get_param("/e2/steer_factor", 1.0)
         self.fw_factor = 0.592
 
 
@@ -84,8 +84,9 @@ class OdometryNode(DTROS):
                 self.log("bag closed")
 
             # self.bag.write("robot_frame_pose", self.pose_robot)
-            print(delta_x, delta_y, delta_theta)
-            print(delta_xw, delta_yw, delta_theta)
+            if self.print_odometry:
+                print(delta_x, delta_y, delta_theta)
+                print(delta_xw, delta_yw, delta_theta)
         self.last_vel = msg
 
 

@@ -43,7 +43,7 @@ class LedNode(DTROS):
     def srv_set_led(self, msg):
         self.log(msg)
         msgp = String()
-        msgp.data=msg.data
+        msgp.data=msg.pattern_name.data
         self.srvp_led_emitter(msgp)
         return LEDSetResponse()
 

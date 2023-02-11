@@ -25,7 +25,7 @@ class OdometryNode(DTROS):
         self.pose_robot=Pose2DStamped()
         self.pose_world=Pose2DStamped()
 
-        self.rot_factor= 1
+        self.rot_factor= 2
         self.fw_factor = 1
 
 

@@ -254,6 +254,6 @@ if __name__ == '__main__':
     # Keep it spinning to keep the node alive
 
     rospy.loginfo("task_p2_node is up and running...")
-    rospy.Timer(rospy.Duration(0.015), node.pub_command)
+    rospy.Timer(rospy.Duration(0.005), node.pub_command)
     node.run()
     rospy.spin()

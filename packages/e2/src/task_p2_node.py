@@ -36,21 +36,31 @@ class TaskP2Node(DTROS):
         self.veh_name = rospy.get_namespace().strip("/")
 
         # Get static parameters
-        # self._radius = rospy.get_param(f'/{self.veh_name}/kinematics_node/radius', 100)
         # self._speed_gain = rospy.get_param("~speed_gain")
         # self._steer_gain = rospy.get_param("~steer_gain")
+        # self._radius = rospy.get_param(f'/{self.veh_name}/kinematics_node/radius', 0.0318)
+        self._radius = 0.207345  # r=33mm
+        self._baseline = 0.102  # l=102mm
+        self._resolution = 135
+        self._angle_to_tick = 135/(2*np.pi)
+
+
         self._speed_gain = rospy.get_param("/e2/speed_gain", 0.41)
         self._steer_gain = rospy.get_param("/e2/steer_gain", 6.5)
         self._circle_ratio = rospy.get_param("/e2/circle_ratio", 0.5)
+        self._rot_factor = (np.pi*self._baseline/(2*self._radius)) * self._angle_to_tick
+        self._rot_factor *= rospy.get_param("/e2/rot_factor", 1.0)
+        self._fwd_factor = (1.25/self._radius)*self._resolution
+        self._fwd_factor *= rospy.get_param("/e2/fwd_factor", 1.0)
         self._factor = {
-            self.State.ROT: rospy.get_param("/e2/steer_factor", 1.0),
-            self.State.ROTC: rospy.get_param("/e2/steer_factor", 1.0),
-            self.State.WAIT: rospy.get_param("/e2/wait_factor", 5.0),
-            self.State.FW: rospy.get_param("/e2/speed_factor", 1.25),
-            self.State.CIR: rospy.get_param("/e2/circle_factor", 1),
-            self.State.CIRP: rospy.get_param("/e2/speed_factor", 1.25) * 0.5,
-            self.State.IDLE: rospy.get_param("/e2/idle_factor", 0.6),
-            self.State.LED: 0
+            self.State.ROT: (self._rot_factor, self._rot_factor),
+            self.State.ROTC: (self._rot_factor, self._rot_factor),
+            self.State.WAIT: (rospy.get_param("/e2/wait_factor", 5.0),0),
+            self.State.FW: (self._fwd_factor, self._fwd_factor),
+            self.State.CIR: (self._fwd_factor, self._fwd_factor),
+            self.State.CIRP: (0.5*self._fwd_factor,0.5*self._fwd_factor),
+            self.State.IDLE: (rospy.get_param("/e2/idle_factor", 0.6),0),
+            self.State.LED: (0,0)
         }
         self._print_odometry = rospy.get_param("/e2/print_odometry", False)
         self.log(self._factor)
@@ -61,14 +71,20 @@ class TaskP2Node(DTROS):
 
         self.status = self.State.IDLE
         self.queue = []
-        self.remaining = 0
+        self.remaining_l = 0
+        self.remaining_r = 0
+        self.l_tick=0
+        self.r_tick=0
         self.wait_start = None
         self.LEDlist = ["WHITE", "BLUE", "RED", "GREEN"]
 
         # Subscribing to the wheel encoders
-        self.sub_velocity = rospy.Subscriber(
-            "~velocity", Twist2DStamped, self.velocity_callback, queue_size=1
-        )
+        # self.sub_velocity = rospy.Subscriber(
+        #     "~velocity", Twist2DStamped, self.velocity_callback, queue_size=1
+        # )
+
+        self.sub_encoder_ticks_left = rospy.Subscriber("~tick_l", WheelEncoderStamped, self.cb_enc_l)
+        self.sub_encoder_ticks_right = rospy.Subscriber("~tick_r", WheelEncoderStamped, self.cb_enc_r)
 
         # Publishers
         self.pub_car_cmd = rospy.Publisher(
@@ -86,23 +102,42 @@ class TaskP2Node(DTROS):
         self.status = self.State.IDLE
         self.pub_command()
 
-    def velocity_callback(self, msg):
-        if (not self.status in {self.State.IDLE, self.State.WAIT}) and (self.last_vel):
-            dt = (msg.header.stamp - self.last_vel.header.stamp).to_sec()
-            if self.status in {self.State.ROTC, self.State.ROT}:
-                delta_omega = self.last_vel.omega * dt
-                self.remaining -= abs(delta_omega)
-                if self._print_odometry:
-                    print(delta_omega, self.remaining)
-            if self.status in {self.State.FW, self.State.CIR, self.State.CIRP}:
-                delta_x = self.last_vel.v * dt
-                self.remaining -= delta_x
-                if self._print_odometry:
-                    print(delta_x, self.remaining)
-            if self.remaining < 0:
+    def cb_enc_l(self, msg):
+        if self.l_tick and self.status not in {self.State.LED,self.State.IDLE,self.State.WAIT}:
+            delta_l = msg.data - self.l_tick
+            self.remaining_l -= -delta_l if self.status==self.State.ROTC else delta_l
+            if self.remaining_l<0:
                 self.command_end()
-        self.last_vel = msg
-        # print(self.status, self.last_vel)
+        self.l_tick=msg.data
+
+    def cb_enc_r(self,msg):
+        if self.r_tick and self.status not in {self.State.LED,self.State.IDLE,self.State.WAIT}:
+            delta_r=msg.data-self.r_tick
+            self.remaining_r-=-delta_r if self.status==self.State.ROT else delta_r
+            if self.remaining_r<0:
+                self.command_end()
+            print(self.remaining_l,self.remaining_r)
+        self.r_tick=msg.data
+
+
+
+    # def velocity_callback(self, msg):
+    #     if (not self.status in {self.State.IDLE, self.State.WAIT}) and (self.last_vel):
+    #         dt = (msg.header.stamp - self.last_vel.header.stamp).to_sec()
+    #         if self.status in {self.State.ROTC, self.State.ROT}:
+    #             delta_omega = self.last_vel.omega * dt
+    #             self.remaining -= abs(delta_omega)
+    #             if self._print_odometry:
+    #                 print(delta_omega, self.remaining)
+    #         if self.status in {self.State.FW, self.State.CIR, self.State.CIRP}:
+    #             delta_x = self.last_vel.v * dt
+    #             self.remaining -= delta_x
+    #             if self._print_odometry:
+    #                 print(delta_x, self.remaining)
+    #         if self.remaining < 0:
+    #             self.command_end()
+    #     self.last_vel = msg
+    #     # print(self.status, self.last_vel)
 
     def carcmd(self, v, omega):
         car_cmd_msg = Twist2DStamped()
@@ -116,9 +151,9 @@ class TaskP2Node(DTROS):
             self.carcmd(0, 0)
             if not self.wait_start:
                 self.wait_start = rospy.get_time()
-                print("wait start", self.wait_start)
+                print("wait start", self.wait_start, self.remaining_l)
             else:
-                if (rospy.get_time() - self.wait_start) > self.remaining:
+                if (rospy.get_time() - self.wait_start) > self.remaining_l:
                     print("wait end")
                     self.state_pop()
                     self.wait_start = None
@@ -141,7 +176,7 @@ class TaskP2Node(DTROS):
         def idle():
             self.carcmd(0, 0)
             self.status = self.State.WAIT
-            self.remaining = self._factor[self.State.IDLE]
+            self.remaining_l,self.remaining_r = self._factor[self.State.IDLE]
 
         def LED():
             try:
@@ -168,16 +203,18 @@ class TaskP2Node(DTROS):
 
     def command_end(self):
         print("command end")
+        self.remaining_l=0
+        self.remaining_r = 0
         self.status=self.State.IDLE
-        self.remaining=self._factor[self.State.IDLE]
+        self.remaining_l,self.remaining_r=self._factor[self.State.IDLE]
 
     def state_pop(self):
         print('pop')
         if self.queue:
             self.last_vel = None
             self.status = self.queue.pop()
-            self.remaining = self._factor[self.status]
-            print(self.status, self.remaining)
+            self.remaining_l,self.remaining_r = self._factor[self.status]
+            print(self.status, self.remaining_l,self.remaining_r)
         else:
             self.status = self.State.IDLE
             rospy.signal_shutdown("done")
@@ -210,6 +247,6 @@ if __name__ == '__main__':
     # Keep it spinning to keep the node alive
 
     rospy.loginfo("task_p2_node is up and running...")
-    rospy.Timer(rospy.Duration(0.02), node.pub_command)
+    rospy.Timer(rospy.Duration(0.01), node.pub_command)
     node.run()
     rospy.spin()

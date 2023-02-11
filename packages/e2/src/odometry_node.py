@@ -5,7 +5,7 @@ import numpy as np
 import os
 import rospy
 from duckietown.dtros import DTROS, NodeType, TopicType, DTParam, ParamType
-from duckietown_msgs.msg import Pose2DStamped, Twist2DStamped
+from duckietown_msgs.msg import Pose2DStamped, Twist2DStamped, WheelEncoderStamped
 from std_msgs.msg import Header, Float32, Int32
 import rosbag
 
@@ -35,6 +35,9 @@ class OdometryNode(DTROS):
         self.sub_velocity = rospy.Subscriber(
             "~velocity", Twist2DStamped, self.velocity_callback, queue_size=1
         )
+
+        self.sub_encoder_ticks_left = rospy.Subscriber("~tick_l", WheelEncoderStamped, self.cb_enc_l)
+        self.sub_encoder_ticks_right = rospy.Subscriber("~tick_r", WheelEncoderStamped, self.cb_enc_r)
 
         self.print_odometry = rospy.get_param("/e2/print_odometry", False)
 

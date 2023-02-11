@@ -11,8 +11,10 @@
 <!--         <remap from="~velocity" to="/$(arg veh)/kinematics_node/velocity" /> -->
 <!--     </node> -->
     <node pkg="e2" type="task_p2_node.py" name="task_p2_node"  output="screen">
+        <remap from="~/tick_l" to="/$(arg veh)/left_wheel_encoder_node/tick" />
+        <remap from="~/tick_r" to="/$(arg veh)/right_wheel_encoder_node/tick" />
         <remap from="~car_cmd" to="/$(arg veh)/car_cmd_switch_node/cmd"/>
-        <remap from="~velocity" to="/$(arg veh)/kinematics_node/velocity" />
+<!--         <remap from="~velocity" to="/$(arg veh)/kinematics_node/velocity" /> -->
         <remap from="~set_pattern" to="/$(arg veh)/led_node/set_led" />
     </node>
     <node pkg="e2" type="led_node.py" name="led_node"  output="screen">

@@ -25,8 +25,8 @@ class OdometryNode(DTROS):
         self.pose_robot=Pose2DStamped()
         self.pose_world=Pose2DStamped()
 
-        self.rot_factor= (0.5*np.pi)/rospy.get_param("/e2/steer_factor", 1.0)
-        self.fw_factor = 0.592
+        self.rot_factor= 1
+        self.fw_factor = 1
 
 
         self.bag=rosbag.Bag('/data/bags/task.bag','w')

@@ -113,7 +113,7 @@ class TaskP2Node(DTROS):
         if self.l_tick and self.status not in {self.State.LED,self.State.IDLE,self.State.WAIT}:
             delta_l = msg.data - self.l_tick
             self.remaining_l -= -delta_l if self.status==self.State.ROTC else delta_l
-            if self.remaining_l<0:
+            if max(self.remaining_l,self.remaining_r)<0:
                 self.command_end()
         self.l_tick=msg.data
 
@@ -121,7 +121,7 @@ class TaskP2Node(DTROS):
         if self.r_tick and self.status not in {self.State.LED,self.State.IDLE,self.State.WAIT}:
             delta_r=msg.data-self.r_tick
             self.remaining_r-=-delta_r if self.status==self.State.ROT else delta_r
-            if self.remaining_r<0:
+            if max(self.remaining_l,self.remaining_r)<0:
                 self.command_end()
             print(self.remaining_l,self.remaining_r)
         self.r_tick=msg.data

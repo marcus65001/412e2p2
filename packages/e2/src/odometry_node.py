@@ -43,6 +43,13 @@ class OdometryNode(DTROS):
 
     def on_shutdown(self):
         self.bag.close()
+        
+    def run(self):
+        r = rospy.Rate(1)
+        while not rospy.is_shutdown():
+            if not rosnode.rosnode_ping("task_p2_node"):
+                rospy.signal_shutdown("done")
+            r.sleep()
 
     def velocity_callback(self, msg):
         if self.last_vel:
@@ -88,6 +95,7 @@ class OdometryNode(DTROS):
                 print(delta_x, delta_y, delta_theta)
                 print(delta_xw, delta_yw, delta_theta)
         self.last_vel = msg
+        
 
 
 if __name__ == '__main__':
@@ -95,4 +103,5 @@ if __name__ == '__main__':
     # Keep it spinning to keep the node alive
 
     rospy.loginfo("odometry_node is up and running...")
+    node.run()
     rospy.spin()

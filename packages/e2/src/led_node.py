@@ -27,7 +27,7 @@ class LedNode(DTROS):
         )
 
         # Service
-        self.srv_set_camera_info = rospy.Service(
+        self.srv_led = rospy.Service(
             "~set_led", LEDSet, self.srv_set_led
         )
 

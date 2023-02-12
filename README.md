@@ -1,47 +1,22 @@
-# Template: template-ros
+# CMPUT 412 Exercise 2 - Part 2
+This repository contains all the code for Exercise 2 Part 2.
 
-This template provides a boilerplate repository
-for developing ROS-based software in Duckietown.
+## Usage
+1. Clone the repository.
+2. Build `dts devel build -H $BOT`.
+3. Run `led_emitter_node` form `dt-core`: 
 
-**NOTE:** If you want to develop software that does not use
-ROS, check out [this template](https://github.com/duckietown/template-basic).
+```
+dts duckiebot demo --demo_name led_emitter_node --duckiebot_name $BOT --package_name led_emitter --image duckietown/dt-core:daffy-arm64v8
+```
 
+4. Run `dts devel run -H $BOT`.
 
-## How to use it
-
-### 1. Fork this repository
-
-Use the fork button in the top-right corner of the github page to fork this template repository.
-
-
-### 2. Create a new repository
-
-Create a new repository on github.com while
-specifying the newly forked template repository as
-a template for your new repository.
+## Nodes
+* led_node: Provides custom service `set_led`, changes LED pattern.
+* odometry_node: Subscribes to the `velocity` topic from `kinematics_node`, records the intergrated `x, y, theta` info for both robot and world frame.
+* task_p2_node: Executes the tasks specified in Part 2.
 
 
-### 3. Define dependencies
-
-List the dependencies in the files `dependencies-apt.txt` and
-`dependencies-py3.txt` (apt packages and pip packages respectively).
-
-
-### 4. Place your code
-
-Place your code in the directory `/packages/` of
-your new repository.
-
-
-### 5. Setup launchers
-
-The directory `/launchers` can contain as many launchers (launching scripts)
-as you want. A default launcher called `default.sh` must always be present.
-
-If you create an executable script (i.e., a file with a valid shebang statement)
-a launcher will be created for it. For example, the script file 
-`/launchers/my-launcher.sh` will be available inside the Docker image as the binary
-`dt-launcher-my-launcher`.
-
-When launching a new container, you can simply provide `dt-launcher-my-launcher` as
-command.
+## License
+[Duckietown](https://www.duckietown.org/about/sw-license)
